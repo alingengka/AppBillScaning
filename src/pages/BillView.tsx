@@ -117,8 +117,8 @@ export default function BillView() {
         </span>
       </div>
 
-      {/* Printable bill */}
-      <div className="rounded-2xl border border-line bg-surface p-5 shadow-sm print:border-0 print:shadow-none">
+      {/* Printable bill — order: shop name & contact, then customer info, then order summary */}
+      <div className="print-bill rounded-2xl border border-line bg-surface p-5 shadow-sm print:border-0 print:shadow-none">
         <div className="mb-4 flex items-start justify-between border-b border-dashed border-line pb-4">
           <div>
             <h1 className="text-lg font-bold text-ink">{shop?.shop_name || 'บิลสั่งซื้อสินค้า'}</h1>
@@ -135,16 +135,8 @@ export default function BillView() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between rounded-xl bg-surface-muted p-4">
-          <div>
-            <p className="text-base font-semibold text-ink">กาแฟ {order.paid_qty} แถม {order.free_qty}</p>
-            <p className="text-xs text-ink-muted">จ่าย {order.paid_qty} ชิ้น + แถม {order.free_qty} ชิ้น</p>
-          </div>
-          <p className="text-lg font-bold text-brand-700">{formatCurrency(order.total_amount)}</p>
-        </div>
-
         {(order.customer_name || order.customer_phone || order.destination || order.note) && (
-          <div className="mt-4 rounded-xl bg-surface-muted p-3 text-sm">
+          <div className="rounded-xl bg-surface-muted p-3 text-sm">
             <p className="mb-1 text-xs font-semibold text-ink-muted">ข้อมูลลูกค้า</p>
             {order.customer_name && <p className="text-ink">{order.customer_name}</p>}
             {order.customer_phone && <p className="text-ink-muted">{order.customer_phone}</p>}
@@ -152,6 +144,14 @@ export default function BillView() {
             {order.note && <p className="mt-1 text-ink-muted italic">หมายเหตุ: {order.note}</p>}
           </div>
         )}
+
+        <div className="mt-4 flex items-center justify-between rounded-xl bg-surface-muted p-4">
+          <div>
+            <p className="text-base font-semibold text-ink">กาแฟ {order.paid_qty} แถม {order.free_qty}</p>
+            <p className="text-xs text-ink-muted">จ่าย {order.paid_qty} ชิ้น + แถม {order.free_qty} ชิ้น</p>
+          </div>
+          <p className="text-lg font-bold text-brand-700">{formatCurrency(order.total_amount)}</p>
+        </div>
       </div>
 
       {/* Actions */}

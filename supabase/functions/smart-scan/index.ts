@@ -35,14 +35,16 @@ const PROMPT = `You are reading a screenshot of a chat conversation (Facebook Me
 The shop's available combo deals (paid bags + free bags = total price in Lao Kip) are listed below. Match the customer's chosen combo to one of these exactly if possible:
 {{COMBOS}}
 
+Do not translate anything. Keep customer_name and note exactly in the language and script they were written in the image (usually Lao) — do not convert them to Thai or English.
+
 Extract the order details from the image and return ONLY a JSON object (no markdown, no explanation) with this shape:
 {
-  "customer_name": string or null,   // prefer a name given in the order message itself; fall back to the chat contact's display name shown at the top of the screenshot
+  "customer_name": string or null,   // prefer a name given in the order message itself; fall back to the chat contact's display name shown at the top of the screenshot; keep in its original script, untranslated
   "customer_phone": string or null,  // digits only, no spaces or dashes
   "paid_qty": number or null,        // paid bags in the chosen combo
   "free_qty": number or null,        // free bags in the chosen combo
   "total_amount": number or null,    // total price in Kip for the chosen combo
-  "note": string or null             // anything else worth flagging, e.g. "cash on delivery" / destination mentioned in the message, in Thai
+  "note": string or null             // anything else worth flagging, e.g. cash on delivery, destination mentioned in the message — keep in its original script, untranslated
 }
 If the image contains no readable order, return all fields as null.`
 

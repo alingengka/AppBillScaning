@@ -50,10 +50,18 @@
 }
 
 @media print {
+  @page {
+    size: 150mm 150mm;
+    margin: 5mm;
+  }
   .no-print {
     display: none !important;
   }
   body {
     background: #fff !important;
+  }
+  .print-bill {
+    width: 140mm;
+    font-size: 11px;
   }
 }
