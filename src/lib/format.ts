@@ -1,16 +1,28 @@
-const thb = new Intl.NumberFormat('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const kip = new Intl.NumberFormat('lo-LA', { maximumFractionDigits: 0 })
 
 export function formatCurrency(value: number): string {
-  return thb.format(value)
+  return `${kip.format(value)} KIP`
 }
 
 export function formatDate(iso: string): string {
+  // calendar: 'gregory' avoids the Thai locale's default Buddhist-era year,
+  // which would show e.g. 2569 instead of 2026 and confuse Lao Kip records.
   return new Date(iso).toLocaleString('th-TH', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    calendar: 'gregory',
+  })
+}
+
+export function formatDateOnly(isoDate: string): string {
+  return new Date(isoDate).toLocaleDateString('th-TH', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    calendar: 'gregory',
   })
 }
 

@@ -3,10 +3,20 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { scanImageForText, OCR_LANGUAGES, type OcrLanguage } from '@/lib/ocr'
-import { parseReceiptText } from '@/lib/parseReceipt'
 import { formatCurrency } from '@/lib/format'
 import Spinner from '@/components/Spinner'
-import type { DraftItem } from '@/types'
+
+const COMBO_PRESETS = [
+  { label: '1 แถม 1', paid: 1, free: 1, total: 280000 },
+  { label: '2 แถม 2', paid: 2, free: 2, total: 550000 },
+  { label: '3 แถม 3', paid: 3, free: 3, total: 800000 },
+  { label: '5 แถม 5', paid: 5, free: 5, total: 1200000 },
+  { label: '10 แถม 10', paid: 10, free: 10, total: 2200000 },
+] as const
+
+function today(): string {
+  return new Date().toISOString().slice(0, 10)
+}
 
 export default function NewOrder() {
   const { user } = useAuth()
@@ -15,30 +25,30 @@ export default function NewOrder() {
 
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
-  const [items, setItems] = useState<DraftItem[]>([])
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState<string | null>(null)
-  const [scannedOnce, setScannedOnce] = useState(false)
+  const [scannedText, setScannedText] = useState<string | null>(null)
   const [ocrLanguage, setOcrLanguage] = useState<OcrLanguage>('lao')
   const [scanProgress, setScanProgress] = useState(0)
 
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
-  const [deliveryAddress, setDeliveryAddress] = useState('')
+  const [orderDate, setOrderDate] = useState(today())
+  const [paidQty, setPaidQty] = useState(1)
+  const [freeQty, setFreeQty] = useState(1)
+  const [totalAmount, setTotalAmount] = useState(0)
+  const [billNumber, setBillNumber] = useState('')
+  const [destination, setDestination] = useState('')
   const [note, setNote] = useState('')
-  const [deliveryFee, setDeliveryFee] = useState(0)
 
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-
-  const subtotal = items.reduce((sum, it) => sum + it.quantity * it.unit_price, 0)
-  const total = subtotal + (deliveryFee || 0)
 
   function loadFile(file: File) {
     setImageFile(file)
     setImagePreview(URL.createObjectURL(file))
     setScanError(null)
-    setScannedOnce(false)
+    setScannedText(null)
   }
 
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
@@ -58,12 +68,7 @@ export default function NewOrder() {
     setScanProgress(0)
     try {
       const text = await scanImageForText(imageFile, ocrLanguage, setScanProgress)
-      const parsed = parseReceiptText(text)
-      if (parsed.length === 0) {
-        setScanError('ไม่พบข้อความในภาพนี้ ลองเพิ่มรายการด้วยตนเองด้านล่างได้เลย')
-      }
-      setItems((prev) => [...prev, ...parsed])
-      setScannedOnce(true)
+      setScannedText(text.trim() || 'ไม่พบข้อความในภาพนี้')
     } catch (err) {
       setScanError(err instanceof Error ? err.message : 'สแกนภาพไม่สำเร็จ')
     } finally {
@@ -71,22 +76,16 @@ export default function NewOrder() {
     }
   }
 
-  function updateItem(id: string, patch: Partial<DraftItem>) {
-    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)))
-  }
-
-  function removeItem(id: string) {
-    setItems((prev) => prev.filter((it) => it.id !== id))
-  }
-
-  function addBlankItem() {
-    setItems((prev) => [...prev, { id: crypto.randomUUID(), name: '', quantity: 1, unit_price: 0 }])
+  function applyPreset(preset: (typeof COMBO_PRESETS)[number]) {
+    setPaidQty(preset.paid)
+    setFreeQty(preset.free)
+    setTotalAmount(preset.total)
   }
 
   async function handleSave(status: 'draft' | 'ready') {
     if (!user) return
-    if (items.length === 0) {
-      setSaveError('กรุณาเพิ่มสินค้าอย่างน้อย 1 รายการก่อนบันทึก')
+    if (!customerName.trim()) {
+      setSaveError('กรุณากรอกชื่อลูกค้า')
       return
     }
     setSaving(true)
@@ -105,29 +104,21 @@ export default function NewOrder() {
         .from('orders')
         .insert({
           user_id: user.id,
-          customer_name: customerName || null,
+          customer_name: customerName.trim(),
           customer_phone: customerPhone || null,
-          delivery_address: deliveryAddress || null,
+          destination: destination || null,
           note: note || null,
           status,
-          delivery_fee: deliveryFee || 0,
+          order_date: orderDate,
+          paid_qty: paidQty,
+          free_qty: freeQty,
+          total_amount: totalAmount,
+          bill_number: billNumber || null,
           source_image_path: sourceImagePath,
         })
         .select()
         .single()
       if (orderError) throw orderError
-
-      const { error: itemsError } = await supabase.from('order_items').insert(
-        items
-          .filter((it) => it.name.trim().length > 0)
-          .map((it) => ({
-            order_id: order.id,
-            name: it.name.trim(),
-            quantity: it.quantity,
-            unit_price: it.unit_price,
-          })),
-      )
-      if (itemsError) throw itemsError
 
       navigate(`/orders/${order.id}`)
     } catch (err) {
@@ -140,11 +131,118 @@ export default function NewOrder() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="text-lg font-semibold text-ink">สแกนสินค้าใหม่</h1>
-        <p className="text-sm text-ink-muted">อัปโหลดภาพหน้าจอสินค้า ระบบจะอ่านชื่อ/จำนวน/ราคาให้อัตโนมัติ</p>
+        <h1 className="text-lg font-semibold text-ink">เพิ่มออเดอร์ใหม่</h1>
+        <p className="text-sm text-ink-muted">เลือกโปรโมชั่น หรือกรอกเอง แล้วแนบภาพแชทสั่งของไว้เป็นหลักฐาน (ถ้ามี)</p>
       </div>
 
-      {/* Image capture / upload */}
+      {/* Combo presets */}
+      <div className="flex flex-wrap gap-2">
+        {COMBO_PRESETS.map((preset) => (
+          <button
+            key={preset.label}
+            type="button"
+            onClick={() => applyPreset(preset)}
+            className={`rounded-full border px-3 py-1.5 text-sm font-medium transition ${
+              paidQty === preset.paid && freeQty === preset.free && totalAmount === preset.total
+                ? 'border-brand-600 bg-brand-600 text-white'
+                : 'border-line bg-surface text-ink hover:border-brand-300 hover:bg-brand-50'
+            }`}
+          >
+            {preset.label} ({formatCurrency(preset.total)})
+          </button>
+        ))}
+      </div>
+
+      {/* Order fields */}
+      <div className="rounded-2xl border border-line bg-surface p-4">
+        <div className="grid grid-cols-2 gap-3">
+          <label className="col-span-2 flex flex-col gap-1 text-sm sm:col-span-1">
+            <span className="font-medium text-ink">ชื่อลูกค้า *</span>
+            <input
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              className="rounded-lg border border-line bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            />
+          </label>
+          <label className="col-span-2 flex flex-col gap-1 text-sm sm:col-span-1">
+            <span className="font-medium text-ink">เบอร์โทร</span>
+            <input
+              value={customerPhone}
+              onChange={(e) => setCustomerPhone(e.target.value)}
+              className="rounded-lg border border-line bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            />
+          </label>
+          <label className="col-span-2 flex flex-col gap-1 text-sm sm:col-span-1">
+            <span className="font-medium text-ink">วันที่</span>
+            <input
+              type="date"
+              value={orderDate}
+              onChange={(e) => setOrderDate(e.target.value)}
+              className="rounded-lg border border-line bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium text-ink">ชิ้นจ่ายเงิน</span>
+            <input
+              type="number"
+              min={0}
+              value={paidQty}
+              onChange={(e) => setPaidQty(Number(e.target.value))}
+              className="rounded-lg border border-line bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium text-ink">ชิ้นแถม</span>
+            <input
+              type="number"
+              min={0}
+              value={freeQty}
+              onChange={(e) => setFreeQty(Number(e.target.value))}
+              className="rounded-lg border border-line bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            />
+          </label>
+          <label className="col-span-2 flex flex-col gap-1 text-sm">
+            <span className="font-medium text-ink">ยอดรวม (KIP)</span>
+            <input
+              type="number"
+              min={0}
+              value={totalAmount}
+              onChange={(e) => setTotalAmount(Number(e.target.value))}
+              className="rounded-lg border border-line bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            />
+          </label>
+
+          <label className="col-span-2 flex flex-col gap-1 text-sm sm:col-span-1">
+            <span className="font-medium text-ink">เลขบิล</span>
+            <input
+              value={billNumber}
+              onChange={(e) => setBillNumber(e.target.value)}
+              className="rounded-lg border border-line bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            />
+          </label>
+          <label className="col-span-2 flex flex-col gap-1 text-sm sm:col-span-1">
+            <span className="font-medium text-ink">ปลายทาง</span>
+            <input
+              value={destination}
+              onChange={(e) => setDestination(e.target.value)}
+              className="rounded-lg border border-line bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            />
+          </label>
+
+          <label className="col-span-2 flex flex-col gap-1 text-sm">
+            <span className="font-medium text-ink">หมายเหตุ</span>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={2}
+              className="resize-none rounded-lg border border-line bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            />
+          </label>
+        </div>
+      </div>
+
+      {/* Image capture / scan (optional, kept for reference / proof of order) */}
       <div
         onPaste={handlePaste}
         tabIndex={0}
@@ -155,7 +253,7 @@ export default function NewOrder() {
         ) : (
           <div className="flex flex-col items-center gap-2 py-6 text-ink-muted">
             <CameraIcon className="size-9 text-brand-400" />
-            <p className="text-sm">แตะเพื่อเลือกภาพ ถ่ายรูป หรือวาง (Ctrl+V) สกรีนช็อตที่นี่</p>
+            <p className="text-sm">แนบภาพแชทสั่งของไว้เป็นหลักฐาน (ไม่บังคับ) — แตะเพื่อเลือก ถ่ายรูป หรือวาง (Ctrl+V)</p>
           </div>
         )}
 
@@ -203,123 +301,13 @@ export default function NewOrder() {
       </div>
 
       {scanError && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">{scanError}</p>}
-      {scannedOnce && !scanError && (
-        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-          สแกนสำเร็จ ตรวจสอบและแก้ไขรายการด้านล่างก่อนบันทึกบิล
-        </p>
+      {scannedText && (
+        <div className="rounded-2xl border border-line bg-surface p-4">
+          <h2 className="mb-2 text-sm font-semibold text-ink">ข้อความที่อ่านได้จากภาพ</h2>
+          <p className="whitespace-pre-wrap text-sm text-ink-muted">{scannedText}</p>
+          <p className="mt-2 text-xs text-ink-muted">ใช้เป็นข้อมูลอ้างอิงกรอกฟอร์มด้านบนเอง</p>
+        </div>
       )}
-
-      {/* Items */}
-      <div className="rounded-2xl border border-line bg-surface p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-ink">รายการสินค้า</h2>
-          <button type="button" onClick={addBlankItem} className="text-xs font-medium text-brand-600 hover:text-brand-700">
-            + เพิ่มรายการ
-          </button>
-        </div>
-
-        {items.length === 0 ? (
-          <p className="py-6 text-center text-sm text-ink-muted">ยังไม่มีรายการสินค้า สแกนภาพหรือเพิ่มด้วยตนเอง</p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {items.map((it) => (
-              <div key={it.id} className="flex items-center gap-2 rounded-lg border border-line p-2">
-                <input
-                  value={it.name}
-                  onChange={(e) => updateItem(it.id, { name: e.target.value })}
-                  placeholder="ชื่อสินค้า"
-                  className="min-w-0 flex-1 rounded-md border border-transparent bg-surface-muted px-2 py-1.5 text-sm outline-none focus:border-brand-300"
-                />
-                <input
-                  type="number"
-                  min={0}
-                  step="1"
-                  value={it.quantity}
-                  onChange={(e) => updateItem(it.id, { quantity: Number(e.target.value) })}
-                  className="w-14 rounded-md border border-transparent bg-surface-muted px-2 py-1.5 text-center text-sm outline-none focus:border-brand-300"
-                />
-                <span className="text-xs text-ink-muted">×</span>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={it.unit_price}
-                  onChange={(e) => updateItem(it.id, { unit_price: Number(e.target.value) })}
-                  className="w-20 rounded-md border border-transparent bg-surface-muted px-2 py-1.5 text-right text-sm outline-none focus:border-brand-300"
-                />
-                <button
-                  type="button"
-                  onClick={() => removeItem(it.id)}
-                  aria-label="ลบรายการ"
-                  className="rounded-md p-1.5 text-ink-muted transition hover:bg-red-50 hover:text-red-600"
-                >
-                  <TrashIcon className="size-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Customer & delivery */}
-      <div className="rounded-2xl border border-line bg-surface p-4">
-        <h2 className="mb-3 text-sm font-semibold text-ink">ข้อมูลลูกค้า / จัดส่ง</h2>
-        <div className="flex flex-col gap-2.5">
-          <input
-            value={customerName}
-            onChange={(e) => setCustomerName(e.target.value)}
-            placeholder="ชื่อลูกค้า"
-            className="rounded-lg border border-line bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-          />
-          <input
-            value={customerPhone}
-            onChange={(e) => setCustomerPhone(e.target.value)}
-            placeholder="เบอร์โทรศัพท์"
-            className="rounded-lg border border-line bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-          />
-          <textarea
-            value={deliveryAddress}
-            onChange={(e) => setDeliveryAddress(e.target.value)}
-            placeholder="ที่อยู่จัดส่ง"
-            rows={2}
-            className="resize-none rounded-lg border border-line bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-          />
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="หมายเหตุถึงไรเดอร์ (ถ้ามี)"
-            rows={2}
-            className="resize-none rounded-lg border border-line bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-          />
-          <label className="flex items-center justify-between gap-2 text-sm">
-            <span className="text-ink-muted">ค่าจัดส่ง</span>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              value={deliveryFee}
-              onChange={(e) => setDeliveryFee(Number(e.target.value))}
-              className="w-24 rounded-lg border border-line bg-surface px-2 py-1.5 text-right text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-            />
-          </label>
-        </div>
-      </div>
-
-      {/* Totals */}
-      <div className="rounded-2xl border border-line bg-surface p-4 text-sm">
-        <div className="flex justify-between py-0.5 text-ink-muted">
-          <span>ยอดรวมสินค้า</span>
-          <span>{formatCurrency(subtotal)} ฿</span>
-        </div>
-        <div className="flex justify-between py-0.5 text-ink-muted">
-          <span>ค่าจัดส่ง</span>
-          <span>{formatCurrency(deliveryFee || 0)} ฿</span>
-        </div>
-        <div className="mt-1 flex justify-between border-t border-line pt-2 text-base font-semibold text-ink">
-          <span>ยอดสุทธิ</span>
-          <span className="text-brand-700">{formatCurrency(total)} ฿</span>
-        </div>
-      </div>
 
       {saveError && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{saveError}</p>}
 
@@ -356,20 +344,6 @@ function CameraIcon({ className }: { className?: string }) {
         strokeLinejoin="round"
       />
       <circle cx="12" cy="13" r="3.2" stroke="currentColor" strokeWidth="1.6" />
-    </svg>
-  )
-}
-
-function TrashIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className={className}>
-      <path
-        d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0-.7 12.1a1.5 1.5 0 0 1-1.5 1.4H8.2a1.5 1.5 0 0 1-1.5-1.4L6 7h12Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
     </svg>
   )
 }
