@@ -6,8 +6,11 @@
 //   supabase secrets set OCR_SPACE_API_KEY=your-key-here
 //
 // Get a free key at https://ocr.space/ocrapi (free tier: 25,000 requests/month).
-
-import { createClient } from 'npm:@supabase/supabase-js@2'
+//
+// No external imports on purpose: the Supabase CLI's bundler resolves every
+// remote specifier at deploy time, which fails in sandboxes with flaky
+// outbound DNS. Auth is checked with a plain fetch to the Auth REST API
+// instead of pulling in the supabase-js SDK.
 
 const OCR_SPACE_ENDPOINT = 'https://api.ocr.space/parse/image'
 
@@ -41,16 +44,13 @@ Deno.serve(async (req) => {
       return json({ error: 'Missing Authorization header' }, 401)
     }
 
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } },
-    )
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseClient.auth.getUser()
-    if (authError || !user) {
+    const userResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/auth/v1/user`, {
+      headers: {
+        Authorization: authHeader,
+        apikey: Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      },
+    })
+    if (!userResponse.ok) {
       return json({ error: 'Invalid or expired session' }, 401)
     }
 
