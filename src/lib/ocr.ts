@@ -1,3 +1,4 @@
+import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 
 /**
@@ -30,9 +31,24 @@ export async function scanImageForText(file: File, language: OcrLanguage = 'lao'
     body: { imageBase64, mimeType: file.type || 'image/jpeg', language },
   })
 
-  if (error) throw new Error(error.message || 'เรียกใช้บริการ OCR ไม่สำเร็จ')
+  if (error) throw new Error(await extractFunctionErrorMessage(error))
   if (data?.error) throw new Error(data.error)
   return data?.text ?? ''
+}
+
+// supabase-js's FunctionsHttpError only carries a generic "non-2xx status
+// code" message — the actual { error: "..." } body our function returns is
+// on error.context (the raw Response) and has to be read separately.
+async function extractFunctionErrorMessage(error: Error): Promise<string> {
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const body = await error.context.json()
+      if (typeof body?.error === 'string') return body.error
+    } catch {
+      // fall through to the generic message below
+    }
+  }
+  return error.message || 'เรียกใช้บริการ OCR ไม่สำเร็จ'
 }
 
 function fileToBase64(file: File): Promise<string> {
