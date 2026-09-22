@@ -15,7 +15,7 @@
 // outbound DNS. Auth is checked with a plain fetch to the Auth REST API
 // instead of pulling in the supabase-js SDK.
 
-const GEMINI_MODEL = 'gemini-2.0-flash'
+const GEMINI_MODEL = 'gemini-3.6-flash'
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 
 const corsHeaders = {
