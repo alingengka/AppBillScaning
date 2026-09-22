@@ -2,7 +2,7 @@ import { useRef, useState, type ChangeEvent, type ClipboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
-import { scanImageForText, OCR_LANGUAGES, type OcrLanguage } from '@/lib/ocr'
+import { smartScanOrder } from '@/lib/smartScan'
 import { formatCurrency } from '@/lib/format'
 import Spinner from '@/components/Spinner'
 
@@ -27,9 +27,7 @@ export default function NewOrder() {
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState<string | null>(null)
-  const [scannedText, setScannedText] = useState<string | null>(null)
-  const [ocrLanguage, setOcrLanguage] = useState<OcrLanguage>('lao')
-  const [scanProgress, setScanProgress] = useState(0)
+  const [scannedOnce, setScannedOnce] = useState(false)
 
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
@@ -48,7 +46,7 @@ export default function NewOrder() {
     setImageFile(file)
     setImagePreview(URL.createObjectURL(file))
     setScanError(null)
-    setScannedText(null)
+    setScannedOnce(false)
   }
 
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
@@ -65,10 +63,21 @@ export default function NewOrder() {
     if (!imageFile) return
     setScanning(true)
     setScanError(null)
-    setScanProgress(0)
     try {
-      const text = await scanImageForText(imageFile, ocrLanguage, setScanProgress)
-      setScannedText(text.trim() || 'ไม่พบข้อความในภาพนี้')
+      const combos = COMBO_PRESETS.map((p) => ({ paid: p.paid, free: p.free, total: p.total }))
+      const result = await smartScanOrder(imageFile, combos)
+
+      if (result.customer_name) setCustomerName(result.customer_name)
+      if (result.customer_phone) setCustomerPhone(result.customer_phone)
+      if (result.paid_qty != null) setPaidQty(result.paid_qty)
+      if (result.free_qty != null) setFreeQty(result.free_qty)
+      if (result.total_amount != null) setTotalAmount(result.total_amount)
+      if (result.note) setNote((prev) => (prev ? `${prev}\n${result.note}` : result.note!))
+
+      if (!result.customer_name && result.paid_qty == null && result.total_amount == null) {
+        setScanError('อ่านออเดอร์จากภาพนี้ไม่ได้ ลองกรอกฟอร์มด้านล่างเองได้เลย')
+      }
+      setScannedOnce(true)
     } catch (err) {
       setScanError(err instanceof Error ? err.message : 'สแกนภาพไม่สำเร็จ')
     } finally {
@@ -132,8 +141,58 @@ export default function NewOrder() {
     <div className="flex flex-col gap-5">
       <div>
         <h1 className="text-lg font-semibold text-ink">เพิ่มออเดอร์ใหม่</h1>
-        <p className="text-sm text-ink-muted">เลือกโปรโมชั่น หรือกรอกเอง แล้วแนบภาพแชทสั่งของไว้เป็นหลักฐาน (ถ้ามี)</p>
+        <p className="text-sm text-ink-muted">แนบภาพแชทสั่งของแล้วให้ AI อ่านให้ หรือเลือกโปร/กรอกเองด้านล่าง</p>
       </div>
+
+      {/* Image capture / smart scan */}
+      <div
+        onPaste={handlePaste}
+        tabIndex={0}
+        className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-brand-200 bg-surface p-5 text-center outline-none focus:border-brand-400"
+      >
+        {imagePreview ? (
+          <img src={imagePreview} alt="ภาพที่เลือก" className="max-h-64 w-full rounded-lg object-contain" />
+        ) : (
+          <div className="flex flex-col items-center gap-2 py-6 text-ink-muted">
+            <CameraIcon className="size-9 text-brand-400" />
+            <p className="text-sm">แคปภาพแชทสั่งของ แล้วแตะเพื่อเลือก ถ่ายรูป หรือวาง (Ctrl+V) ที่นี่</p>
+          </div>
+        )}
+
+        <div className="flex w-full gap-2">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex-1 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2.5 text-sm font-medium text-brand-700 transition hover:bg-brand-100"
+          >
+            {imageFile ? 'เปลี่ยนภาพ' : 'เลือกภาพ / ถ่ายรูป'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleScan()}
+            disabled={!imageFile || scanning}
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50"
+          >
+            {scanning && <Spinner className="size-4 text-white" />}
+            {scanning ? 'กำลังอ่านออเดอร์...' : 'ให้ AI อ่านออเดอร์'}
+          </button>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+      </div>
+
+      {scanError && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">{scanError}</p>}
+      {scannedOnce && !scanError && (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+          อ่านออเดอร์แล้ว ตรวจสอบและแก้ไขข้อมูลด้านล่างก่อนบันทึกบิล
+        </p>
+      )}
 
       {/* Combo presets */}
       <div className="flex flex-wrap gap-2">
@@ -241,73 +300,6 @@ export default function NewOrder() {
           </label>
         </div>
       </div>
-
-      {/* Image capture / scan (optional, kept for reference / proof of order) */}
-      <div
-        onPaste={handlePaste}
-        tabIndex={0}
-        className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-brand-200 bg-surface p-5 text-center outline-none focus:border-brand-400"
-      >
-        {imagePreview ? (
-          <img src={imagePreview} alt="ภาพที่เลือก" className="max-h-64 w-full rounded-lg object-contain" />
-        ) : (
-          <div className="flex flex-col items-center gap-2 py-6 text-ink-muted">
-            <CameraIcon className="size-9 text-brand-400" />
-            <p className="text-sm">แนบภาพแชทสั่งของไว้เป็นหลักฐาน (ไม่บังคับ) — แตะเพื่อเลือก ถ่ายรูป หรือวาง (Ctrl+V)</p>
-          </div>
-        )}
-
-        <label className="flex w-full items-center justify-between gap-2 text-sm">
-          <span className="text-ink-muted">ภาษาในภาพ</span>
-          <select
-            value={ocrLanguage}
-            onChange={(e) => setOcrLanguage(e.target.value as OcrLanguage)}
-            className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-          >
-            {OCR_LANGUAGES.map((lang) => (
-              <option key={lang.code} value={lang.code}>
-                {lang.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <div className="flex w-full gap-2">
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="flex-1 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2.5 text-sm font-medium text-brand-700 transition hover:bg-brand-100"
-          >
-            {imageFile ? 'เปลี่ยนภาพ' : 'เลือกภาพ / ถ่ายรูป'}
-          </button>
-          <button
-            type="button"
-            onClick={handleScan}
-            disabled={!imageFile || scanning}
-            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50"
-          >
-            {scanning && <Spinner className="size-4 text-white" />}
-            {scanning ? `กำลังสแกน... ${Math.round(scanProgress * 100)}%` : 'สแกนอ่านข้อมูล'}
-          </button>
-        </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-          onChange={handleFileChange}
-        />
-      </div>
-
-      {scanError && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">{scanError}</p>}
-      {scannedText && (
-        <div className="rounded-2xl border border-line bg-surface p-4">
-          <h2 className="mb-2 text-sm font-semibold text-ink">ข้อความที่อ่านได้จากภาพ</h2>
-          <p className="whitespace-pre-wrap text-sm text-ink-muted">{scannedText}</p>
-          <p className="mt-2 text-xs text-ink-muted">ใช้เป็นข้อมูลอ้างอิงกรอกฟอร์มด้านบนเอง</p>
-        </div>
-      )}
 
       {saveError && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{saveError}</p>}
 
