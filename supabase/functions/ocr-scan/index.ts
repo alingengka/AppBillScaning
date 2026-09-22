@@ -1,18 +1,21 @@
 // Supabase Edge Function: ocr-scan
 //
-// Proxies an uploaded product/receipt screenshot to the OCR.space cloud OCR
-// API so the OCR provider's secret key never reaches the browser. Deploy with:
+// Proxies an uploaded product/receipt screenshot to the Google Cloud Vision
+// API so the provider's API key never reaches the browser. Deploy with:
 //   supabase functions deploy ocr-scan
-//   supabase secrets set OCR_SPACE_API_KEY=your-key-here
+//   supabase secrets set GOOGLE_VISION_API_KEY=your-key-here
 //
-// Get a free key at https://ocr.space/ocrapi (free tier: 25,000 requests/month).
+// Create a key at https://console.cloud.google.com/apis/credentials after
+// enabling the Cloud Vision API on the project (restrict the key to that API).
+// Google Cloud Vision is used instead of OCR.space because it supports Lao
+// ("lo") language hints, which OCR.space's language list does not include.
 //
 // No external imports on purpose: the Supabase CLI's bundler resolves every
 // remote specifier at deploy time, which fails in sandboxes with flaky
 // outbound DNS. Auth is checked with a plain fetch to the Auth REST API
 // instead of pulling in the supabase-js SDK.
 
-const OCR_SPACE_ENDPOINT = 'https://api.ocr.space/parse/image'
+const VISION_ENDPOINT = 'https://vision.googleapis.com/v1/images:annotate'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,7 +26,7 @@ const corsHeaders = {
 interface ScanRequestBody {
   imageBase64: string // raw base64, no data: prefix required
   mimeType?: string
-  language?: string // OCR.space language code, e.g. "tha", "eng"
+  language?: string // BCP-47 language hint for Vision, e.g. "lo", "th", "en"
 }
 
 Deno.serve(async (req) => {
@@ -36,9 +39,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Require a logged-in Supabase user (JWT is verified automatically when
-    // verify_jwt is left enabled in supabase/functions/ocr-scan/config? we
-    // double check here for clarity and to fetch the user id for logging).
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       return json({ error: 'Missing Authorization header' }, 401)
@@ -54,9 +54,9 @@ Deno.serve(async (req) => {
       return json({ error: 'Invalid or expired session' }, 401)
     }
 
-    const apiKey = Deno.env.get('OCR_SPACE_API_KEY')
+    const apiKey = Deno.env.get('GOOGLE_VISION_API_KEY')
     if (!apiKey) {
-      return json({ error: 'OCR provider is not configured (missing OCR_SPACE_API_KEY secret)' }, 500)
+      return json({ error: 'OCR provider is not configured (missing GOOGLE_VISION_API_KEY secret)' }, 500)
     }
 
     const body = (await req.json()) as Partial<ScanRequestBody>
@@ -64,34 +64,33 @@ Deno.serve(async (req) => {
       return json({ error: 'imageBase64 is required' }, 400)
     }
 
-    const mimeType = body.mimeType ?? 'image/jpeg'
-    const language = body.language ?? 'tha'
+    const language = body.language ?? 'lo'
 
-    const form = new FormData()
-    form.append('base64Image', `data:${mimeType};base64,${body.imageBase64}`)
-    form.append('language', language)
-    form.append('isTable', 'true')
-    form.append('scale', 'true')
-    form.append('OCREngine', '2')
-
-    const ocrResponse = await fetch(OCR_SPACE_ENDPOINT, {
+    const visionResponse = await fetch(`${VISION_ENDPOINT}?key=${apiKey}`, {
       method: 'POST',
-      headers: { apikey: apiKey },
-      body: form,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requests: [
+          {
+            image: { content: body.imageBase64 },
+            features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
+            imageContext: { languageHints: [language] },
+          },
+        ],
+      }),
     })
 
-    const ocrResult = await ocrResponse.json()
+    const visionResult = await visionResponse.json()
+    const result = visionResult.responses?.[0]
 
-    if (ocrResult.IsErroredOnProcessing) {
-      const message = Array.isArray(ocrResult.ErrorMessage)
-        ? ocrResult.ErrorMessage.join(', ')
-        : (ocrResult.ErrorMessage ?? 'OCR provider failed to process the image')
-      return json({ error: message }, 502)
+    if (result?.error) {
+      return json({ error: result.error.message ?? 'OCR provider failed to process the image' }, 502)
+    }
+    if (!visionResponse.ok) {
+      return json({ error: visionResult.error?.message ?? 'OCR provider request failed' }, 502)
     }
 
-    const text: string = (ocrResult.ParsedResults ?? [])
-      .map((r: { ParsedText?: string }) => r.ParsedText ?? '')
-      .join('\n')
+    const text: string = result?.fullTextAnnotation?.text ?? ''
 
     return json({ text })
   } catch (err) {

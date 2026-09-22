@@ -19,7 +19,7 @@ export default function NewOrder() {
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState<string | null>(null)
   const [scannedOnce, setScannedOnce] = useState(false)
-  const [ocrLanguage, setOcrLanguage] = useState<OcrLanguage>('lao')
+  const [ocrLanguage, setOcrLanguage] = useState<OcrLanguage>('lo')
 
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')

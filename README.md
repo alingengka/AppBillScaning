@@ -8,7 +8,7 @@ Web App (PWA) ที่ติดตั้งลงหน้าจอมือถ
 ## ฟีเจอร์หลัก
 
 - 📷 อัปโหลดภาพ / ถ่ายรูป / วาง (paste) สกรีนช็อตสินค้า
-- 🔍 OCR ผ่าน Cloud API (OCR.space) อ่านข้อความจากภาพ แล้วแปลงเป็นรายการสินค้าอัตโนมัติ
+- 🔍 OCR ผ่าน Google Cloud Vision อ่านข้อความจากภาพ (รองรับไทย/ลาว/อังกฤษ) แล้วแปลงเป็นรายการสินค้าอัตโนมัติ
 - ✏️ ตารางรายการสินค้าที่แก้ไขได้ทั้งชื่อ/จำนวน/ราคา ก่อนบันทึกบิล
 - 🧾 สร้างบิลพร้อมพิมพ์ / แชร์ข้อความบิลให้ไรเดอร์ผ่าน Web Share API
 - 📦 สถานะออเดอร์: ฉบับร่าง → พร้อมส่ง → จัดส่งแล้ว
@@ -20,7 +20,7 @@ Web App (PWA) ที่ติดตั้งลงหน้าจอมือถ
 - [Vite](https://vite.dev) + React 19 + TypeScript
 - [Tailwind CSS v4](https://tailwindcss.com) (ธีมสี minimal blue/white ปรับได้ที่ `src/index.css`)
 - [Supabase](https://supabase.com) — Postgres, Auth, Storage, Edge Functions
-- [OCR.space](https://ocr.space/ocrapi) cloud OCR API (เรียกผ่าน Supabase Edge Function เพื่อไม่ให้ API key หลุดไปที่เบราว์เซอร์)
+- [Google Cloud Vision](https://cloud.google.com/vision) OCR API (เรียกผ่าน Supabase Edge Function เพื่อไม่ให้ API key หลุดไปที่เบราว์เซอร์) — เลือกใช้เพราะรองรับภาษาลาว ซึ่ง OCR.space ไม่รองรับ
 - `vite-plugin-pwa` สำหรับติดตั้งเป็นแอปบนมือถือ
 
 ## เริ่มต้นใช้งาน (local dev)
@@ -46,13 +46,19 @@ cp .env.example .env.local
 
 ### 4. Deploy Edge Function สำหรับ OCR
 
-สมัคร API key ฟรีที่ [ocr.space/ocrapi](https://ocr.space/ocrapi) (ฟรี 25,000 ครั้ง/เดือน) จากนั้น:
+สร้าง API key ของ Google Cloud Vision:
+
+1. เปิด [Google Cloud Console](https://console.cloud.google.com) สร้างโปรเจกต์ (หรือใช้โปรเจกต์เดิม) — ต้องผูกบัตรเครดิต/billing account (มี free tier 1,000 ภาพ/เดือน)
+2. เปิดใช้งาน **Cloud Vision API** ที่ [console.cloud.google.com/apis/library/vision.googleapis.com](https://console.cloud.google.com/apis/library/vision.googleapis.com)
+3. สร้าง API key ที่ [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials) แล้วจำกัดสิทธิ์ (Restrict key) ให้ใช้ได้เฉพาะ Cloud Vision API เท่านั้น
+
+จากนั้น deploy edge function:
 
 ```bash
 npx supabase login
 npx supabase link --project-ref your-project-ref
 npx supabase functions deploy ocr-scan
-npx supabase secrets set OCR_SPACE_API_KEY=your-ocr-space-key
+npx supabase secrets set GOOGLE_VISION_API_KEY=your-google-vision-key
 ```
 
 ### 5. รันแอป
@@ -72,7 +78,7 @@ src/
   types.ts       TypeScript types ของ Order / OrderItem / ShopSettings
 supabase/
   migrations/    SQL schema + RLS policies
-  functions/     Edge Function ocr-scan (proxy ไปยัง OCR.space)
+  functions/     Edge Function ocr-scan (proxy ไปยัง Google Cloud Vision)
 ```
 
 ## หมายเหตุเรื่องความแม่นยำของ OCR
