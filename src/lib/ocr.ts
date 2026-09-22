@@ -1,10 +1,24 @@
 import { supabase } from '@/lib/supabase'
 
 /**
+ * OCR.space language codes we expose in the UI. Lao ('lao') is not on
+ * OCR.space's confirmed-supported list — it's offered because most of this
+ * shop's customers write in Lao, but results may be poor or the API may
+ * reject it; the scanned items table is always editable as a fallback.
+ */
+export const OCR_LANGUAGES = [
+  { code: 'lao', label: 'ລາວ (Lao)' },
+  { code: 'tha', label: 'ไทย (Thai)' },
+  { code: 'eng', label: 'English' },
+] as const
+
+export type OcrLanguage = (typeof OCR_LANGUAGES)[number]['code']
+
+/**
  * Sends an image to the `ocr-scan` Supabase Edge Function, which proxies it
  * to the OCR.space cloud OCR API (keeping the provider API key server-side).
  */
-export async function scanImageForText(file: File, language = 'tha'): Promise<string> {
+export async function scanImageForText(file: File, language: OcrLanguage = 'lao'): Promise<string> {
   const {
     data: { session },
   } = await supabase.auth.getSession()

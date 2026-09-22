@@ -2,7 +2,7 @@ import { useRef, useState, type ChangeEvent, type ClipboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
-import { scanImageForText } from '@/lib/ocr'
+import { scanImageForText, OCR_LANGUAGES, type OcrLanguage } from '@/lib/ocr'
 import { parseReceiptText } from '@/lib/parseReceipt'
 import { formatCurrency } from '@/lib/format'
 import Spinner from '@/components/Spinner'
@@ -19,6 +19,7 @@ export default function NewOrder() {
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState<string | null>(null)
   const [scannedOnce, setScannedOnce] = useState(false)
+  const [ocrLanguage, setOcrLanguage] = useState<OcrLanguage>('lao')
 
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
@@ -54,7 +55,7 @@ export default function NewOrder() {
     setScanning(true)
     setScanError(null)
     try {
-      const text = await scanImageForText(imageFile)
+      const text = await scanImageForText(imageFile, ocrLanguage)
       const parsed = parseReceiptText(text)
       if (parsed.length === 0) {
         setScanError('ไม่พบข้อความในภาพนี้ ลองเพิ่มรายการด้วยตนเองด้านล่างได้เลย')
@@ -155,6 +156,21 @@ export default function NewOrder() {
             <p className="text-sm">แตะเพื่อเลือกภาพ ถ่ายรูป หรือวาง (Ctrl+V) สกรีนช็อตที่นี่</p>
           </div>
         )}
+
+        <label className="flex w-full items-center justify-between gap-2 text-sm">
+          <span className="text-ink-muted">ภาษาในภาพ</span>
+          <select
+            value={ocrLanguage}
+            onChange={(e) => setOcrLanguage(e.target.value as OcrLanguage)}
+            className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+          >
+            {OCR_LANGUAGES.map((lang) => (
+              <option key={lang.code} value={lang.code}>
+                {lang.label}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <div className="flex w-full gap-2">
           <button
