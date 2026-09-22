@@ -1,4 +1,5 @@
 export type OrderStatus = 'draft' | 'ready' | 'delivered' | 'cancelled'
+export type PaymentMethod = 'cod' | 'destination' | 'origin'
 
 export interface Order {
   id: string
@@ -13,6 +14,7 @@ export interface Order {
   free_qty: number
   total_amount: number
   bill_number: string | null
+  payment_method: PaymentMethod | null
   source_image_path: string | null
   created_at: string
   updated_at: string

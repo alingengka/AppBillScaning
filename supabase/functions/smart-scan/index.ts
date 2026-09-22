@@ -44,7 +44,8 @@ Extract the order details from the image and return ONLY a JSON object (no markd
   "paid_qty": number or null,        // paid bags in the chosen combo
   "free_qty": number or null,        // free bags in the chosen combo
   "total_amount": number or null,    // total price in Kip for the chosen combo
-  "note": string or null             // anything else worth flagging, e.g. cash on delivery, destination mentioned in the message — keep in its original script, untranslated
+  "payment_method": "cod" | "destination" | "origin" or null,  // "cod" if the message says cash on delivery / collect on delivery; "destination" if it says pay at the delivery destination point; "origin" if it says pay at the origin/pickup point; null if not mentioned
+  "note": string or null             // anything else worth flagging, e.g. destination mentioned in the message — keep in its original script, untranslated
 }
 If the image contains no readable order, return all fields as null.`
 
@@ -108,6 +109,7 @@ Deno.serve(async (req) => {
               paid_qty: { type: 'NUMBER', nullable: true },
               free_qty: { type: 'NUMBER', nullable: true },
               total_amount: { type: 'NUMBER', nullable: true },
+              payment_method: { type: 'STRING', enum: ['cod', 'destination', 'origin'], nullable: true },
               note: { type: 'STRING', nullable: true },
             },
           },

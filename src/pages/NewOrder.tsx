@@ -5,6 +5,13 @@ import { useAuth } from '@/context/AuthContext'
 import { smartScanOrder } from '@/lib/smartScan'
 import { formatCurrency } from '@/lib/format'
 import Spinner from '@/components/Spinner'
+import type { PaymentMethod } from '@/types'
+
+const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
+  { value: 'cod', label: 'จ่าย COD' },
+  { value: 'destination', label: 'ปลายทาง' },
+  { value: 'origin', label: 'ต้นทาง' },
+]
 
 const COMBO_PRESETS = [
   { label: '1 แถม 1', paid: 1, free: 1, total: 280000 },
@@ -35,6 +42,7 @@ interface Draft {
   totalAmount: number
   billNumber: string
   destination: string
+  paymentMethod: PaymentMethod | null
   note: string
 }
 
@@ -53,6 +61,7 @@ function newDraft(file: File): Draft {
     totalAmount: 0,
     billNumber: '',
     destination: '',
+    paymentMethod: null,
     note: '',
   }
 }
@@ -105,6 +114,7 @@ export default function NewOrder() {
           paidQty: result.paid_qty ?? d.paidQty,
           freeQty: result.free_qty ?? d.freeQty,
           totalAmount: result.total_amount ?? d.totalAmount,
+          paymentMethod: result.payment_method ?? d.paymentMethod,
           note: result.note ? (d.note ? `${d.note}\n${result.note}` : result.note) : d.note,
         }))
       } catch (err) {
@@ -177,6 +187,7 @@ export default function NewOrder() {
           free_qty: draft.freeQty,
           total_amount: draft.totalAmount,
           bill_number: draft.billNumber || null,
+          payment_method: draft.paymentMethod,
           source_image_path: path,
         })
         if (orderError) throw orderError
@@ -425,6 +436,26 @@ function DraftCard({
             className="rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
           />
         </label>
+
+        <div className="col-span-2 flex flex-col gap-1 text-sm">
+          <span className="font-medium text-ink">เงื่อนไขชำระเงิน</span>
+          <div className="flex flex-wrap gap-1.5">
+            {PAYMENT_METHODS.map((m) => (
+              <button
+                key={m.value}
+                type="button"
+                onClick={() => onPatch({ paymentMethod: draft.paymentMethod === m.value ? null : m.value })}
+                className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${
+                  draft.paymentMethod === m.value
+                    ? 'border-brand-600 bg-brand-600 text-white'
+                    : 'border-line bg-surface text-ink hover:border-brand-300 hover:bg-brand-50'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <label className="col-span-2 flex flex-col gap-1 text-sm">
           <span className="font-medium text-ink">หมายเหตุ</span>

@@ -1,5 +1,6 @@
 import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import type { PaymentMethod } from '@/types'
 
 export interface ComboOption {
   paid: number
@@ -13,6 +14,7 @@ export interface ExtractedOrder {
   paid_qty: number | null
   free_qty: number | null
   total_amount: number | null
+  payment_method: PaymentMethod | null
   note: string | null
 }
 
@@ -39,6 +41,7 @@ export async function smartScanOrder(file: File, combos: ComboOption[]): Promise
     paid_qty: data?.paid_qty ?? null,
     free_qty: data?.free_qty ?? null,
     total_amount: data?.total_amount ?? null,
+    payment_method: data?.payment_method ?? null,
     note: data?.note ?? null,
   }
 }
