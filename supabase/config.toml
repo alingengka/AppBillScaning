@@ -1,0 +1,4 @@
+project_id = "billscan"
+
+[functions.ocr-scan]
+verify_jwt = true
