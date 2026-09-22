@@ -7,7 +7,7 @@
 //
 // Get a free key at https://ocr.space/ocrapi (free tier: 25,000 requests/month).
 
-import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const OCR_SPACE_ENDPOINT = 'https://api.ocr.space/parse/image'
 
