@@ -19,7 +19,8 @@ export default function NewOrder() {
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState<string | null>(null)
   const [scannedOnce, setScannedOnce] = useState(false)
-  const [ocrLanguage, setOcrLanguage] = useState<OcrLanguage>('lo')
+  const [ocrLanguage, setOcrLanguage] = useState<OcrLanguage>('lao')
+  const [scanProgress, setScanProgress] = useState(0)
 
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
@@ -54,8 +55,9 @@ export default function NewOrder() {
     if (!imageFile) return
     setScanning(true)
     setScanError(null)
+    setScanProgress(0)
     try {
-      const text = await scanImageForText(imageFile, ocrLanguage)
+      const text = await scanImageForText(imageFile, ocrLanguage, setScanProgress)
       const parsed = parseReceiptText(text)
       if (parsed.length === 0) {
         setScanError('ไม่พบข้อความในภาพนี้ ลองเพิ่มรายการด้วยตนเองด้านล่างได้เลย')
@@ -187,7 +189,7 @@ export default function NewOrder() {
             className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50"
           >
             {scanning && <Spinner className="size-4 text-white" />}
-            {scanning ? 'กำลังสแกน...' : 'สแกนอ่านข้อมูล'}
+            {scanning ? `กำลังสแกน... ${Math.round(scanProgress * 100)}%` : 'สแกนอ่านข้อมูล'}
           </button>
         </div>
         <input
