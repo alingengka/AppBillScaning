@@ -64,20 +64,24 @@
     margin: 0;
     background: #fff !important;
   }
-  /* Collapse the app shell's padding/min-height so only one page prints. */
+  /* Collapse the app shell's padding, gaps and min-height so the bills sit
+     flush at the top of each page. */
   #root > *,
-  main {
+  main,
+  main > * {
     min-height: 0 !important;
     padding: 0 !important;
+    gap: 0 !important;
   }
+  /* One bill per 150×150mm page, so "print all" gives a page per order. */
   .print-bill {
-    position: fixed;
-    top: 0;
-    left: 0;
     width: 150mm !important;
     height: 150mm;
     border: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
+  }
+  .print-bill + .print-bill {
+    break-before: page;
   }
 }
