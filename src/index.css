@@ -50,18 +50,34 @@
 }
 
 @media print {
+  /* The bill template already has its own margins, so it fills the whole
+     150×150mm label edge to edge. */
   @page {
     size: 150mm 150mm;
-    margin: 5mm;
+    margin: 0;
   }
   .no-print {
     display: none !important;
   }
+  html,
   body {
+    margin: 0;
     background: #fff !important;
   }
+  /* Collapse the app shell's padding/min-height so only one page prints. */
+  #root > *,
+  main {
+    min-height: 0 !important;
+    padding: 0 !important;
+  }
   .print-bill {
-    width: 140mm;
-    font-size: 11px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 150mm !important;
+    height: 150mm;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
   }
 }
