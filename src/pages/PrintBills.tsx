@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import BillSheet from '@/components/BillSheet'
+import OpenSourceButton from '@/components/BillWithSource'
 import Spinner from '@/components/Spinner'
 import type { Order } from '@/types'
 
@@ -72,7 +73,10 @@ export default function PrintBills() {
             พิมพ์ทั้งหมด ({orders.length} ใบ)
           </button>
           {orders.map((order) => (
-            <BillSheet key={order.id} order={order} />
+            <Fragment key={order.id}>
+              <BillSheet order={order} />
+              <OpenSourceButton order={order} className="-mt-2 self-start" />
+            </Fragment>
           ))}
         </>
       )}

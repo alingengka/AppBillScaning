@@ -81,7 +81,7 @@
     border-radius: 0 !important;
     box-shadow: none !important;
   }
-  .print-bill + .print-bill {
+  .print-bill ~ .print-bill {
     break-before: page;
   }
 }

@@ -6,7 +6,7 @@ import { smartScanOrder } from '@/lib/smartScan'
 import { formatCurrency } from '@/lib/format'
 import Spinner from '@/components/Spinner'
 import Lightbox from '@/components/Lightbox'
-import BillSheet from '@/components/BillSheet'
+import { BillAndSource } from '@/components/BillWithSource'
 import type { Order, PaymentMethod } from '@/types'
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
@@ -341,7 +341,7 @@ function DraftCard({
       )}
       {viewing === 'bill' && (
         <Lightbox onClose={() => setViewing(null)}>
-          <BillSheet order={draftToOrder(draft)} />
+          <BillAndSource order={draftToOrder(draft)} sourceUrl={draft.preview} />
         </Lightbox>
       )}
 
@@ -389,7 +389,7 @@ function DraftCard({
               onClick={() => setViewing('bill')}
               className="rounded-md border border-brand-200 bg-brand-50 px-2 py-1 text-xs font-medium text-brand-700 transition hover:bg-brand-100"
             >
-              ดูตัวอย่างบิล
+              ดูบิลเทียบกับภาพแชท
             </button>
           </div>
         </div>
