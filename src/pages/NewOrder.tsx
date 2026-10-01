@@ -73,7 +73,8 @@ async function mapWithConcurrency<T>(items: T[], limit: number, fn: (item: T) =>
 export default function NewOrder() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const galleryInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
 
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [saving, setSaving] = useState(false)
@@ -208,21 +209,38 @@ export default function NewOrder() {
       >
         <div className="flex flex-col items-center gap-2 py-2 text-ink-muted">
           <CameraIcon className="size-9 text-brand-400" />
-          <p className="text-sm">เลือกได้หลายภาพพร้อมกัน ถ่ายรูป หรือวาง (Ctrl+V)</p>
+          <p className="text-sm">เลือกภาพแคปแชทจากคลังภาพได้หลายภาพพร้อมกัน ถ่ายรูป หรือวาง (Ctrl+V)</p>
         </div>
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="w-full rounded-lg border border-brand-200 bg-brand-50 px-3 py-2.5 text-sm font-medium text-brand-700 transition hover:bg-brand-100"
-        >
-          เพิ่มภาพ
-        </button>
+        <div className="flex w-full gap-2">
+          <button
+            type="button"
+            onClick={() => galleryInputRef.current?.click()}
+            className="flex-[2] rounded-lg bg-brand-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700"
+          >
+            เลือกจากคลังภาพ
+          </button>
+          <button
+            type="button"
+            onClick={() => cameraInputRef.current?.click()}
+            className="flex-1 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2.5 text-sm font-medium text-brand-700 transition hover:bg-brand-100"
+          >
+            ถ่ายรูป
+          </button>
+        </div>
+        {/* No `capture` here: on phones it would force the camera and hide the gallery. */}
         <input
-          ref={fileInputRef}
+          ref={galleryInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={handleFileChange}
+        />
+        <input
+          ref={cameraInputRef}
           type="file"
           accept="image/*"
           capture="environment"
-          multiple
           className="hidden"
           onChange={handleFileChange}
         />
