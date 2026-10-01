@@ -5,7 +5,9 @@ import { useAuth } from '@/context/AuthContext'
 import { smartScanOrder } from '@/lib/smartScan'
 import { formatCurrency } from '@/lib/format'
 import Spinner from '@/components/Spinner'
-import type { PaymentMethod } from '@/types'
+import Lightbox from '@/components/Lightbox'
+import BillSheet from '@/components/BillSheet'
+import type { Order, PaymentMethod } from '@/types'
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
   { value: 'cod', label: 'จ่าย COD' },
@@ -63,6 +65,28 @@ function newDraft(file: File): Draft {
     destination: '',
     paymentMethod: null,
     note: '',
+  }
+}
+
+/** The draft shaped like a saved order, so BillSheet can preview it as printed. */
+function draftToOrder(draft: Draft): Order {
+  return {
+    id: draft.id,
+    user_id: '',
+    customer_name: draft.customerName.trim() || null,
+    customer_phone: draft.customerPhone || null,
+    destination: draft.destination || null,
+    note: draft.note || null,
+    status: 'draft',
+    order_date: draft.orderDate,
+    paid_qty: draft.paidQty,
+    free_qty: draft.freeQty,
+    total_amount: draft.totalAmount,
+    bill_number: draft.billNumber || null,
+    payment_method: draft.paymentMethod,
+    source_image_path: null,
+    created_at: '',
+    updated_at: '',
   }
 }
 
@@ -306,12 +330,31 @@ function DraftCard({
   onApplyPreset: (preset: (typeof COMBO_PRESETS)[number]) => void
 }) {
   const nameMissing = !draft.customerName.trim()
+  const [viewing, setViewing] = useState<'image' | 'bill' | null>(null)
 
   return (
     <div className="rounded-2xl border border-line bg-surface p-4">
+      {viewing === 'image' && (
+        <Lightbox onClose={() => setViewing(null)}>
+          <img src={draft.preview} alt="ภาพแชท" className="w-full rounded-lg" />
+        </Lightbox>
+      )}
+      {viewing === 'bill' && (
+        <Lightbox onClose={() => setViewing(null)}>
+          <BillSheet order={draftToOrder(draft)} />
+        </Lightbox>
+      )}
+
       <div className="mb-3 flex items-start gap-3">
-        <img src={draft.preview} alt="ภาพแชท" className="size-16 shrink-0 rounded-lg border border-line object-cover" />
-        <div className="min-w-0 flex-1">
+        <button
+          type="button"
+          onClick={() => setViewing('image')}
+          aria-label="ดูภาพแชทขนาดเต็ม"
+          className="shrink-0 rounded-lg transition hover:opacity-80"
+        >
+          <img src={draft.preview} alt="ภาพแชท" className="size-16 rounded-lg border border-line object-cover" />
+        </button>
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           {draft.status === 'scanning' && (
             <p className="flex items-center gap-1.5 text-xs text-brand-600">
               <Spinner className="size-3.5" />
@@ -333,6 +376,22 @@ function DraftCard({
               </button>
             </div>
           )}
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setViewing('image')}
+              className="rounded-md border border-line px-2 py-1 text-xs font-medium text-ink transition hover:bg-surface-muted"
+            >
+              ดูภาพแชท
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewing('bill')}
+              className="rounded-md border border-brand-200 bg-brand-50 px-2 py-1 text-xs font-medium text-brand-700 transition hover:bg-brand-100"
+            >
+              ดูตัวอย่างบิล
+            </button>
+          </div>
         </div>
         <button
           type="button"

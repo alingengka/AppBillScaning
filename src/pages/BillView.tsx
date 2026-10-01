@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { formatCurrency, STATUS_LABEL, STATUS_STYLE } from '@/lib/format'
 import BillSheet from '@/components/BillSheet'
+import Lightbox from '@/components/Lightbox'
 import Spinner from '@/components/Spinner'
 import type { Order, OrderStatus, ShopSettings } from '@/types'
 
@@ -16,6 +17,8 @@ export default function BillView() {
   const [error, setError] = useState<string | null>(null)
   const [updating, setUpdating] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null)
+  const [screenshotError, setScreenshotError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!orderId) return
@@ -73,6 +76,15 @@ export default function BillView() {
     return lines.filter(Boolean).join('\n')
   }
 
+  async function openScreenshot() {
+    if (!order?.source_image_path) return
+    setScreenshotError(null)
+    // The bucket is private, so ask for a short-lived link to our own file.
+    const { data, error } = await supabase.storage.from('screenshots').createSignedUrl(order.source_image_path, 60 * 10)
+    if (error || !data) setScreenshotError(error?.message ?? 'เปิดภาพไม่สำเร็จ')
+    else setScreenshotUrl(data.signedUrl)
+  }
+
   async function handleShare() {
     const text = billText()
     if (navigator.share) {
@@ -119,6 +131,22 @@ export default function BillView() {
       </div>
 
       <BillSheet order={order} />
+
+      {order.source_image_path && (
+        <button
+          type="button"
+          onClick={() => void openScreenshot()}
+          className="no-print self-start text-sm font-medium text-brand-600 hover:text-brand-700"
+        >
+          ดูภาพแชทต้นฉบับ →
+        </button>
+      )}
+      {screenshotError && <p className="no-print text-xs text-red-600">{screenshotError}</p>}
+      {screenshotUrl && (
+        <Lightbox onClose={() => setScreenshotUrl(null)}>
+          <img src={screenshotUrl} alt="ภาพแชทต้นฉบับ" className="w-full rounded-lg" />
+        </Lightbox>
+      )}
 
       {/* Actions */}
       <div className="no-print flex flex-col gap-2">
