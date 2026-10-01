@@ -35,7 +35,7 @@ const PROMPT = `You are reading a screenshot of a chat conversation (Facebook Me
 The shop's available combo deals (paid bags + free bags = total price in Lao Kip) are listed below. Match the customer's chosen combo to one of these exactly if possible:
 {{COMBOS}}
 
-Do not translate anything. Keep customer_name and note exactly in the language and script they were written in the image (usually Lao) — do not convert them to Thai or English.
+Do not translate anything. Keep customer_name, destination and note exactly in the language and script they were written in the image (usually Lao) — do not convert them to Thai or English.
 
 Extract the order details from the image and return ONLY a JSON object (no markdown, no explanation) with this shape:
 {
@@ -45,7 +45,8 @@ Extract the order details from the image and return ONLY a JSON object (no markd
   "free_qty": number or null,        // free bags in the chosen combo
   "total_amount": number or null,    // total price in Kip for the chosen combo
   "payment_method": "cod" | "destination" | "origin" or null,  // "cod" if the message says cash on delivery / collect on delivery; "destination" if it says pay at the delivery destination point; "origin" if it says pay at the origin/pickup point; null if not mentioned
-  "note": string or null             // anything else worth flagging, e.g. destination mentioned in the message — keep in its original script, untranslated
+  "destination": string or null,     // the customer's delivery address as written in the message: village (ບ້ານ), district (ເມືອງ), province (ແຂວງ), landmarks, and the shipping company/branch (e.g. ອານຸສິດ, ຮຸ່ງອາລຸນ) if mentioned — keep in its original script, untranslated
+  "note": string or null             // anything else worth flagging that is not the address — keep in its original script, untranslated
 }
 If the image contains no readable order, return all fields as null.`
 
@@ -110,6 +111,7 @@ Deno.serve(async (req) => {
               free_qty: { type: 'NUMBER', nullable: true },
               total_amount: { type: 'NUMBER', nullable: true },
               payment_method: { type: 'STRING', enum: ['cod', 'destination', 'origin'], nullable: true },
+              destination: { type: 'STRING', nullable: true },
               note: { type: 'STRING', nullable: true },
             },
           },

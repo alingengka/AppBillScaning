@@ -115,6 +115,7 @@ export default function NewOrder() {
           freeQty: result.free_qty ?? d.freeQty,
           totalAmount: result.total_amount ?? d.totalAmount,
           paymentMethod: result.payment_method ?? d.paymentMethod,
+          destination: result.destination ?? d.destination,
           note: result.note ? (d.note ? `${d.note}\n${result.note}` : result.note) : d.note,
         }))
       } catch (err) {
@@ -429,7 +430,7 @@ function DraftCard({
           />
         </label>
         <label className="col-span-2 flex flex-col gap-1 text-sm sm:col-span-1">
-          <span className="font-medium text-ink">ปลายทาง</span>
+          <span className="font-medium text-ink">ที่อยู่ลูกค้า</span>
           <input
             value={draft.destination}
             onChange={(e) => onPatch({ destination: e.target.value })}

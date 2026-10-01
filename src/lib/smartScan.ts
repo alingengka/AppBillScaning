@@ -15,6 +15,7 @@ export interface ExtractedOrder {
   free_qty: number | null
   total_amount: number | null
   payment_method: PaymentMethod | null
+  destination: string | null
   note: string | null
 }
 
@@ -42,6 +43,7 @@ export async function smartScanOrder(file: File, combos: ComboOption[]): Promise
     free_qty: data?.free_qty ?? null,
     total_amount: data?.total_amount ?? null,
     payment_method: data?.payment_method ?? null,
+    destination: data?.destination ?? null,
     note: data?.note ?? null,
   }
 }
