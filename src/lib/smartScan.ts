@@ -26,11 +26,11 @@ export interface ExtractedOrder {
  * messages are informal and mix the chat contact's name with the message.
  */
 export async function smartScanOrder(file: File, combos: ComboOption[]): Promise<ExtractedOrder> {
-  const imageBase64 = await fileToBase64(file)
+  const { base64: imageBase64, mimeType } = await prepareImageForScan(file)
 
   const { data, error } = await supabase.functions.invoke<Partial<ExtractedOrder> & { error?: string }>(
     'smart-scan',
-    { body: { imageBase64, mimeType: file.type || 'image/jpeg', combos } },
+    { body: { imageBase64, mimeType, combos } },
   )
 
   if (error) throw new Error(await extractFunctionErrorMessage(error))
@@ -75,6 +75,34 @@ async function extractFunctionErrorMessage(error: Error): Promise<string> {
     }
   }
   return error.message || 'เรียกใช้บริการอ่านภาพไม่สำเร็จ'
+}
+
+// Longest side, in pixels, of the image sent to the AI. Phone screenshots are
+// often 2500px+ PNGs of several MB; the model downsamples them anyway, so
+// shrinking first makes the upload much faster without losing readable text.
+const SCAN_MAX_SIDE = 2000
+const SCAN_JPEG_QUALITY = 0.9
+
+async function prepareImageForScan(file: File): Promise<{ base64: string; mimeType: string }> {
+  try {
+    const bitmap = await createImageBitmap(file)
+    const scale = Math.min(1, SCAN_MAX_SIDE / Math.max(bitmap.width, bitmap.height))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(bitmap.width * scale)
+    canvas.height = Math.round(bitmap.height * scale)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('no 2d context')
+    // JPEG has no transparency; paint white so transparent PNGs don't turn black.
+    ctx.fillStyle = '#fff'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    bitmap.close()
+    const dataUrl = canvas.toDataURL('image/jpeg', SCAN_JPEG_QUALITY)
+    return { base64: dataUrl.split(',')[1] ?? '', mimeType: 'image/jpeg' }
+  } catch {
+    // Formats the browser can't decode (e.g. HEIC on some devices): send as-is.
+    return { base64: await fileToBase64(file), mimeType: file.type || 'image/jpeg' }
+  }
 }
 
 function fileToBase64(file: File): Promise<string> {

@@ -100,61 +100,57 @@ Deno.serve(async (req) => {
       .join('\n')
     const prompt = PROMPT.replace('{{COMBOS}}', combosText || '(none listed)')
 
-    const geminiResponse = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [{ text: prompt }, { inlineData: { mimeType, data: body.imageBase64 } }],
-          },
-        ],
-        generationConfig: {
-          // Deterministic output: we want a faithful transcription, not creativity.
-          temperature: 0,
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: 'OBJECT',
-            properties: {
-              customer_name: { type: 'STRING', nullable: true },
-              customer_phone: { type: 'STRING', nullable: true },
-              paid_qty: { type: 'NUMBER', nullable: true },
-              free_qty: { type: 'NUMBER', nullable: true },
-              total_amount: { type: 'NUMBER', nullable: true },
-              payment_method: { type: 'STRING', enum: ['cod', 'destination', 'origin'], nullable: true },
-              destination: {
-                type: 'STRING',
-                nullable: true,
-                description: 'Full delivery address in Lao script: village, district, province, shipping company/branch',
-              },
-              note: {
-                type: 'STRING',
-                nullable: true,
-                description: 'Other instructions that are not part of the address; null if none',
-              },
-            },
-            propertyOrdering: [
-              'customer_name',
-              'customer_phone',
-              'paid_qty',
-              'free_qty',
-              'total_amount',
-              'payment_method',
-              'destination',
-              'note',
-            ],
-          },
+    const request = {
+      contents: [
+        {
+          parts: [{ text: prompt }, { inlineData: { mimeType, data: body.imageBase64 } }],
         },
-      }),
-    })
+      ],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: 'OBJECT',
+          properties: {
+            customer_name: { type: 'STRING', nullable: true },
+            customer_phone: { type: 'STRING', nullable: true },
+            paid_qty: { type: 'NUMBER', nullable: true },
+            free_qty: { type: 'NUMBER', nullable: true },
+            total_amount: { type: 'NUMBER', nullable: true },
+            payment_method: { type: 'STRING', enum: ['cod', 'destination', 'origin'], nullable: true },
+            destination: {
+              type: 'STRING',
+              nullable: true,
+              description: 'Full delivery address in Lao script: village, district, province, shipping company/branch',
+            },
+            note: {
+              type: 'STRING',
+              nullable: true,
+              description: 'Other instructions that are not part of the address; null if none',
+            },
+          },
+          propertyOrdering: [
+            'customer_name',
+            'customer_phone',
+            'paid_qty',
+            'free_qty',
+            'total_amount',
+            'payment_method',
+            'destination',
+            'note',
+          ],
+        },
+      },
+    }
 
-    const geminiResult = await geminiResponse.json()
+    const { response: geminiResponse, result: geminiResult } = await callGemini(apiKey, request)
 
     if (!geminiResponse.ok) {
       return json({ error: geminiResult.error?.message ?? 'AI provider request failed' }, 502)
     }
 
-    const text: string | undefined = geminiResult.candidates?.[0]?.content?.parts?.[0]?.text
+    // Skip any thought-summary parts and take the actual answer.
+    const parts: { text?: string; thought?: boolean }[] = geminiResult.candidates?.[0]?.content?.parts ?? []
+    const text = parts.find((part) => part.text && !part.thought)?.text
     if (!text) {
       return json({ error: 'AI provider returned no result' }, 502)
     }
@@ -172,6 +168,42 @@ Deno.serve(async (req) => {
     return json({ error: 'Unexpected server error' }, 500)
   }
 })
+
+// Gemini models think before answering by default; for reading a chat
+// screenshot that mostly adds latency, so ask for minimal thinking.
+const FAST_THINKING = { thinkingConfig: { thinkingLevel: 'low' } }
+
+/**
+ * Calls Gemini fast (low thinking), retrying once without the thinking
+ * setting if the model rejects it, and once more after a short pause if
+ * Gemini is overloaded (429/503 "high demand").
+ */
+async function callGemini(apiKey: string, request: { generationConfig: Record<string, unknown> }) {
+  let withThinking = true
+  let retriedBusy = false
+  for (;;) {
+    const payload = withThinking
+      ? { ...request, generationConfig: { ...request.generationConfig, ...FAST_THINKING } }
+      : request
+    const response = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    const result = await response.json()
+
+    if (response.status === 400 && withThinking && /thinking/i.test(result.error?.message ?? '')) {
+      withThinking = false
+      continue
+    }
+    if ((response.status === 429 || response.status === 503) && !retriedBusy) {
+      retriedBusy = true
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+      continue
+    }
+    return { response, result }
+  }
+}
 
 function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {

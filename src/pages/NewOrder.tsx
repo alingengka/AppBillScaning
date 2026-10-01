@@ -21,7 +21,7 @@ const COMBO_PRESETS = [
   { label: '10 แถม 10', paid: 10, free: 10, total: 2200000 },
 ] as const
 
-const SCAN_CONCURRENCY = 3
+const SCAN_CONCURRENCY = 4
 const SAVE_CONCURRENCY = 3
 
 function today(): string {
