@@ -49,7 +49,7 @@ ADDRESS RULES — very important:
 Extract the order details from the image and return ONLY a JSON object (no markdown, no explanation) with this shape:
 {
   "customer_name": string or null,   // prefer a name given in the order message itself; fall back to the chat contact's display name shown at the top of the screenshot
-  "customer_phone": string or null,  // digits only, no spaces or dashes
+  "customer_phone": string or null,  // digits only, no spaces or dashes. Lao mobile numbers look like 020 xxxx xxxx (11 digits) or 030 xxx xxxx (10 digits); write +856 / 856 as a leading 0. Convert Lao digits ໐໑໒໓໔໕໖໗໘໙ and Thai digits to 0-9
   "paid_qty": number or null,        // paid bags in the chosen combo
   "free_qty": number or null,        // free bags in the chosen combo
   "total_amount": number or null,    // total price in Kip for the chosen combo
@@ -72,16 +72,6 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       return json({ error: 'Missing Authorization header' }, 401)
-    }
-
-    const userResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/auth/v1/user`, {
-      headers: {
-        Authorization: authHeader,
-        apikey: Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      },
-    })
-    if (!userResponse.ok) {
-      return json({ error: 'Invalid or expired session' }, 401)
     }
 
     const apiKey = Deno.env.get('GEMINI_API_KEY')
@@ -142,7 +132,24 @@ Deno.serve(async (req) => {
       },
     }
 
-    const { response: geminiResponse, result: geminiResult } = await callGemini(apiKey, request)
+    // Check the session and start reading the image at the same time: the
+    // auth round trip no longer adds to every scan. If the session turns out
+    // to be invalid, the Gemini request is cancelled before we use it.
+    const abort = new AbortController()
+    const geminiCall = callGemini(apiKey, request, abort.signal)
+    geminiCall.catch(() => {}) // handled below; avoids an unhandled rejection if aborted
+    const userResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/auth/v1/user`, {
+      headers: {
+        Authorization: authHeader,
+        apikey: Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      },
+    })
+    if (!userResponse.ok) {
+      abort.abort()
+      return json({ error: 'Invalid or expired session' }, 401)
+    }
+
+    const { response: geminiResponse, result: geminiResult } = await geminiCall
 
     if (!geminiResponse.ok) {
       return json({ error: geminiResult.error?.message ?? 'AI provider request failed' }, 502)
@@ -178,7 +185,11 @@ const FAST_THINKING = { thinkingConfig: { thinkingLevel: 'low' } }
  * setting if the model rejects it, and once more after a short pause if
  * Gemini is overloaded (429/503 "high demand").
  */
-async function callGemini(apiKey: string, request: { generationConfig: Record<string, unknown> }) {
+async function callGemini(
+  apiKey: string,
+  request: { generationConfig: Record<string, unknown> },
+  signal: AbortSignal,
+) {
   let withThinking = true
   let retriedBusy = false
   for (;;) {
@@ -189,6 +200,7 @@ async function callGemini(apiKey: string, request: { generationConfig: Record<st
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      signal,
     })
     const result = await response.json()
 

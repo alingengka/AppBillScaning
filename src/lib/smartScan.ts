@@ -36,7 +36,7 @@ export async function smartScanOrder(file: File, combos: ComboOption[]): Promise
   if (error) throw new Error(await extractFunctionErrorMessage(error))
   if (data?.error) throw new Error(data.error)
 
-  return moveAddressOutOfNote({
+  const order = moveAddressOutOfNote({
     customer_name: data?.customer_name ?? null,
     customer_phone: data?.customer_phone ?? null,
     paid_qty: data?.paid_qty ?? null,
@@ -46,6 +46,36 @@ export async function smartScanOrder(file: File, combos: ComboOption[]): Promise
     destination: data?.destination ?? null,
     note: data?.note ?? null,
   })
+  return snapToCombo({ ...order, customer_phone: normalizePhone(order.customer_phone) }, combos)
+}
+
+/**
+ * Cleans up a phone number the AI read: Lao (໐-໙) and Thai (๐-๙) digits
+ * become 0-9, spaces/dashes go, and the +856 country code becomes a
+ * leading 0 (e.g. "+856 20 5551 2345" → "02055512345").
+ */
+export function normalizePhone(phone: string | null): string | null {
+  if (!phone) return null
+  let digits = phone
+    .replace(/[\u0ED0-\u0ED9]/g, (c) => String(c.charCodeAt(0) - 0x0ed0))
+    .replace(/[\u0E50-\u0E59]/g, (c) => String(c.charCodeAt(0) - 0x0e50))
+    .replace(/\D/g, '')
+  if (digits.startsWith('856')) digits = digits.slice(3)
+  // Lao mobile numbers written without their leading 0 (20xxxxxxxx / 30xxxxxxx).
+  if (/^(20\d{8}|30\d{7})$/.test(digits)) digits = `0${digits}`
+  return digits || null
+}
+
+/**
+ * Makes the combo consistent with the shop's fixed deals when the AI's
+ * numbers disagree (e.g. it read the price right but the bag count wrong):
+ * a total that matches a deal wins, then a paid count that matches one.
+ */
+export function snapToCombo(order: ExtractedOrder, combos: ComboOption[]): ExtractedOrder {
+  const combo =
+    combos.find((c) => c.total === order.total_amount) ?? combos.find((c) => c.paid === order.paid_qty)
+  if (!combo) return order
+  return { ...order, paid_qty: combo.paid, free_qty: combo.free, total_amount: combo.total }
 }
 
 // Words that only show up in a Lao delivery address: village, district,
