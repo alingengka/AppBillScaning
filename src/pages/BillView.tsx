@@ -126,6 +126,12 @@ export default function BillView() {
       {/* Actions */}
       <div className="no-print flex flex-col gap-2">
         <div className="flex gap-2">
+          <Link
+            to={`/orders/${order.id}/edit`}
+            className="flex-1 rounded-lg border border-line bg-surface py-2.5 text-center text-sm font-semibold text-ink transition hover:bg-surface-muted"
+          >
+            แก้ไข
+          </Link>
           <button
             onClick={() => window.print()}
             className="flex-1 rounded-lg border border-line bg-surface py-2.5 text-sm font-semibold text-ink transition hover:bg-surface-muted"

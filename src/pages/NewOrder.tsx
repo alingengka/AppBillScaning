@@ -3,25 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { smartScanOrder } from '@/lib/smartScan'
-import { formatCurrency } from '@/lib/format'
+import OrderFields from '@/components/OrderFields'
+import { formValuesToColumns, type OrderFormValues } from '@/lib/orderForm'
+import { COMBO_PRESETS } from '@/lib/combos'
 import Spinner from '@/components/Spinner'
 import Lightbox from '@/components/Lightbox'
 import { BillAndSource } from '@/components/BillWithSource'
-import type { Order, PaymentMethod } from '@/types'
-
-const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
-  { value: 'cod', label: 'จ่าย COD' },
-  { value: 'destination', label: 'ปลายทาง' },
-  { value: 'origin', label: 'ต้นทาง' },
-]
-
-const COMBO_PRESETS = [
-  { label: '1 แถม 1', paid: 1, free: 1, total: 280000 },
-  { label: '2 แถม 2', paid: 2, free: 2, total: 550000 },
-  { label: '3 แถม 3', paid: 3, free: 3, total: 800000 },
-  { label: '5 แถม 5', paid: 5, free: 5, total: 1200000 },
-  { label: '10 แถม 10', paid: 10, free: 10, total: 2200000 },
-] as const
+import type { Order } from '@/types'
 
 const SCAN_CONCURRENCY = 4
 const SAVE_CONCURRENCY = 3
@@ -30,22 +18,12 @@ function today(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-interface Draft {
+interface Draft extends OrderFormValues {
   id: string
   file: File
   preview: string
   status: 'scanning' | 'scanned' | 'error'
   scanError: string | null
-  customerName: string
-  customerPhone: string
-  orderDate: string
-  paidQty: number
-  freeQty: number
-  totalAmount: number
-  billNumber: string
-  destination: string
-  paymentMethod: PaymentMethod | null
-  note: string
 }
 
 function newDraft(file: File): Draft {
@@ -71,19 +49,10 @@ function newDraft(file: File): Draft {
 /** The draft shaped like a saved order, so BillSheet can preview it as printed. */
 function draftToOrder(draft: Draft): Order {
   return {
+    ...formValuesToColumns(draft),
     id: draft.id,
     user_id: '',
-    customer_name: draft.customerName.trim() || null,
-    customer_phone: draft.customerPhone || null,
-    destination: draft.destination || null,
-    note: draft.note || null,
     status: 'draft',
-    order_date: draft.orderDate,
-    paid_qty: draft.paidQty,
-    free_qty: draft.freeQty,
-    total_amount: draft.totalAmount,
-    bill_number: draft.billNumber || null,
-    payment_method: draft.paymentMethod,
     source_image_path: null,
     created_at: '',
     updated_at: '',
@@ -176,10 +145,6 @@ export default function NewOrder() {
     void scanDrafts([draft])
   }
 
-  function applyPreset(id: string, preset: (typeof COMBO_PRESETS)[number]) {
-    patchDraft(id, { paidQty: preset.paid, freeQty: preset.free, totalAmount: preset.total })
-  }
-
   async function handleSaveAll(status: 'draft' | 'ready') {
     if (!user || drafts.length === 0) return
 
@@ -202,17 +167,8 @@ export default function NewOrder() {
 
         const { error: orderError } = await supabase.from('orders').insert({
           user_id: user.id,
-          customer_name: draft.customerName.trim(),
-          customer_phone: draft.customerPhone || null,
-          destination: draft.destination || null,
-          note: draft.note || null,
+          ...formValuesToColumns(draft),
           status,
-          order_date: draft.orderDate,
-          paid_qty: draft.paidQty,
-          free_qty: draft.freeQty,
-          total_amount: draft.totalAmount,
-          bill_number: draft.billNumber || null,
-          payment_method: draft.paymentMethod,
           source_image_path: path,
         })
         if (orderError) throw orderError
@@ -280,7 +236,6 @@ export default function NewOrder() {
           onPatch={(patch) => patchDraft(draft.id, patch)}
           onRemove={() => removeDraft(draft.id)}
           onRetryScan={() => retryScan(draft)}
-          onApplyPreset={(preset) => applyPreset(draft.id, preset)}
         />
       ))}
 
@@ -321,15 +276,12 @@ function DraftCard({
   onPatch,
   onRemove,
   onRetryScan,
-  onApplyPreset,
 }: {
   draft: Draft
   onPatch: (patch: Partial<Draft>) => void
   onRemove: () => void
   onRetryScan: () => void
-  onApplyPreset: (preset: (typeof COMBO_PRESETS)[number]) => void
 }) {
-  const nameMissing = !draft.customerName.trim()
   const [viewing, setViewing] = useState<'image' | 'bill' | null>(null)
 
   return (
@@ -403,130 +355,7 @@ function DraftCard({
         </button>
       </div>
 
-      <div className="mb-3 flex flex-wrap gap-1.5">
-        {COMBO_PRESETS.map((preset) => (
-          <button
-            key={preset.label}
-            type="button"
-            onClick={() => onApplyPreset(preset)}
-            className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${
-              draft.paidQty === preset.paid && draft.freeQty === preset.free && draft.totalAmount === preset.total
-                ? 'border-brand-600 bg-brand-600 text-white'
-                : 'border-line bg-surface text-ink hover:border-brand-300 hover:bg-brand-50'
-            }`}
-          >
-            {preset.label} ({formatCurrency(preset.total)})
-          </button>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-2 gap-2.5">
-        <label className="col-span-2 flex flex-col gap-1 text-sm sm:col-span-1">
-          <span className="font-medium text-ink">ชื่อลูกค้า *</span>
-          <input
-            value={draft.customerName}
-            onChange={(e) => onPatch({ customerName: e.target.value })}
-            className={`rounded-lg border bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-100 ${
-              nameMissing ? 'border-red-300 focus:border-red-400' : 'border-line focus:border-brand-500'
-            }`}
-          />
-        </label>
-        <label className="col-span-2 flex flex-col gap-1 text-sm sm:col-span-1">
-          <span className="font-medium text-ink">เบอร์โทร</span>
-          <input
-            value={draft.customerPhone}
-            onChange={(e) => onPatch({ customerPhone: e.target.value })}
-            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-          />
-        </label>
-        <label className="col-span-2 flex flex-col gap-1 text-sm sm:col-span-1">
-          <span className="font-medium text-ink">วันที่</span>
-          <input
-            type="date"
-            value={draft.orderDate}
-            onChange={(e) => onPatch({ orderDate: e.target.value })}
-            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-          />
-        </label>
-
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium text-ink">ชิ้นจ่ายเงิน</span>
-          <input
-            type="number"
-            min={0}
-            value={draft.paidQty}
-            onChange={(e) => onPatch({ paidQty: Number(e.target.value) })}
-            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium text-ink">ชิ้นแถม</span>
-          <input
-            type="number"
-            min={0}
-            value={draft.freeQty}
-            onChange={(e) => onPatch({ freeQty: Number(e.target.value) })}
-            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-          />
-        </label>
-        <label className="col-span-2 flex flex-col gap-1 text-sm">
-          <span className="font-medium text-ink">ยอดรวม (KIP)</span>
-          <input
-            type="number"
-            min={0}
-            value={draft.totalAmount}
-            onChange={(e) => onPatch({ totalAmount: Number(e.target.value) })}
-            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-          />
-        </label>
-
-        <label className="col-span-2 flex flex-col gap-1 text-sm sm:col-span-1">
-          <span className="font-medium text-ink">เลขบิล</span>
-          <input
-            value={draft.billNumber}
-            onChange={(e) => onPatch({ billNumber: e.target.value })}
-            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-          />
-        </label>
-        <label className="col-span-2 flex flex-col gap-1 text-sm sm:col-span-1">
-          <span className="font-medium text-ink">ที่อยู่ลูกค้า</span>
-          <input
-            value={draft.destination}
-            onChange={(e) => onPatch({ destination: e.target.value })}
-            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-          />
-        </label>
-
-        <div className="col-span-2 flex flex-col gap-1 text-sm">
-          <span className="font-medium text-ink">เงื่อนไขชำระเงิน</span>
-          <div className="flex flex-wrap gap-1.5">
-            {PAYMENT_METHODS.map((m) => (
-              <button
-                key={m.value}
-                type="button"
-                onClick={() => onPatch({ paymentMethod: draft.paymentMethod === m.value ? null : m.value })}
-                className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${
-                  draft.paymentMethod === m.value
-                    ? 'border-brand-600 bg-brand-600 text-white'
-                    : 'border-line bg-surface text-ink hover:border-brand-300 hover:bg-brand-50'
-                }`}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <label className="col-span-2 flex flex-col gap-1 text-sm">
-          <span className="font-medium text-ink">หมายเหตุ</span>
-          <textarea
-            value={draft.note}
-            onChange={(e) => onPatch({ note: e.target.value })}
-            rows={2}
-            className="resize-none rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-          />
-        </label>
-      </div>
+      <OrderFields values={draft} onChange={onPatch} />
     </div>
   )
 }

@@ -7,6 +7,7 @@ import Dashboard from '@/pages/Dashboard'
 import NewOrder from '@/pages/NewOrder'
 import BillView from '@/pages/BillView'
 import PrintBills from '@/pages/PrintBills'
+import EditOrder from '@/pages/EditOrder'
 import Settings from '@/pages/Settings'
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/new" element={<NewOrder />} />
             <Route path="/orders/:orderId" element={<BillView />} />
+            <Route path="/orders/:orderId/edit" element={<EditOrder />} />
             <Route path="/print" element={<PrintBills />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
