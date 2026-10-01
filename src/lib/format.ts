@@ -26,6 +26,33 @@ export function formatDateOnly(isoDate: string): string {
   })
 }
 
+/** Today's date in the device's own time zone, as YYYY-MM-DD (not UTC, which
+ * would still be "yesterday" before 7am in Laos). */
+export function localDate(date = new Date()): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+/** Shifts a YYYY-MM-DD date by whole days. */
+export function addDays(isoDate: string, days: number): string {
+  const [y, m, d] = isoDate.split('-').map(Number)
+  return localDate(new Date(y, m - 1, d + days))
+}
+
+/** "2026-10-01" → "พฤ. 01 ต.ค. 2026", read as a local calendar day. */
+export function formatDayHeading(isoDate: string): string {
+  const [y, m, d] = isoDate.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('th-TH', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    calendar: 'gregory',
+  })
+}
+
 export const STATUS_LABEL: Record<string, string> = {
   draft: 'ฉบับร่าง',
   ready: 'พร้อมส่ง',

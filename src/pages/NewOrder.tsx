@@ -6,6 +6,7 @@ import { smartScanOrder } from '@/lib/smartScan'
 import OrderFields from '@/components/OrderFields'
 import { formValuesToColumns, type OrderFormValues } from '@/lib/orderForm'
 import { COMBO_PRESETS } from '@/lib/combos'
+import { localDate } from '@/lib/format'
 import Spinner from '@/components/Spinner'
 import Lightbox from '@/components/Lightbox'
 import { BillAndSource } from '@/components/BillWithSource'
@@ -14,9 +15,6 @@ import type { Order } from '@/types'
 const SCAN_CONCURRENCY = 4
 const SAVE_CONCURRENCY = 3
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10)
-}
 
 interface Draft extends OrderFormValues {
   id: string
@@ -35,7 +33,7 @@ function newDraft(file: File): Draft {
     scanError: null,
     customerName: '',
     customerPhone: '',
-    orderDate: today(),
+    orderDate: localDate(),
     paidQty: 1,
     freeQty: 1,
     totalAmount: 0,
