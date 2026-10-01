@@ -17,8 +17,10 @@ export function formatDate(iso: string): string {
   })
 }
 
+/** "2026-10-01" → "01 ต.ค. 2026", read as a local calendar day (not UTC midnight). */
 export function formatDateOnly(isoDate: string): string {
-  return new Date(isoDate).toLocaleDateString('th-TH', {
+  const [y, m, d] = isoDate.slice(0, 10).split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('th-TH', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',

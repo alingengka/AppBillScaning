@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
-import { addDays, formatCurrency, formatDate, formatDayHeading, localDate, STATUS_LABEL, STATUS_STYLE } from '@/lib/format'
+import { addDays, formatCurrency, formatDateOnly, formatDayHeading, localDate, STATUS_LABEL, STATUS_STYLE } from '@/lib/format'
 import Spinner from '@/components/Spinner'
 import type { Order } from '@/types'
 
@@ -320,7 +320,7 @@ function OrderSummary({ order }: { order: Order }) {
           </span>
         </div>
         <p className="mt-0.5 truncate text-xs text-ink-muted">
-          {order.paid_qty} แถม {order.free_qty} • {formatDate(order.created_at)}
+          {order.paid_qty} แถม {order.free_qty} • {formatDateOnly(order.order_date)}
         </p>
       </div>
       <div className="shrink-0 text-right text-sm font-semibold text-brand-700">
