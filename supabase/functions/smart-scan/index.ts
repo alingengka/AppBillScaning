@@ -30,23 +30,32 @@ interface ScanRequestBody {
   combos: { paid: number; free: number; total: number }[]
 }
 
-const PROMPT = `You are reading a screenshot of a chat conversation (Facebook Messenger, Line, WhatsApp, etc.) for a coffee shop in Laos that sells combo deals. The customer's message about the order may mix Lao and Thai script, contain typos, and be informal.
+const PROMPT = `You are reading a screenshot of a chat conversation (Facebook Messenger, Line, WhatsApp, etc.) for a coffee shop in Laos that sells combo deals. The customer writes in Lao (sometimes mixed with Thai), informally and possibly with typos.
 
 The shop's available combo deals (paid bags + free bags = total price in Lao Kip) are listed below. Match the customer's chosen combo to one of these exactly if possible:
 {{COMBOS}}
 
-Do not translate anything. Keep customer_name, destination and note exactly in the language and script they were written in the image (usually Lao) — do not convert them to Thai or English.
+LANGUAGE RULES — very important:
+- Copy Lao text exactly as written, character by character, including every vowel, tone mark (່ ້ ໊ ໋) and consonant. Read slowly and carefully; do not guess or "correct" spellings.
+- Never translate, and never write Lao words with Thai letters (e.g. write ບ້ານ, never บ้าน). Use only Lao Unicode characters (U+0E80–U+0EFF) for Lao words.
+- Keep Latin text, numbers and Thai text exactly as they appear.
+
+ADDRESS RULES — very important:
+- Put the customer's delivery address in "destination", never in "note".
+- The address is everything describing where to send the parcel: village (ບ້ານ), district (ເມືອງ), province (ແຂວງ) or capital (ນະຄອນຫຼວງ), street or landmark, and the shipping/transport company and branch (e.g. ອານຸສິດ, ຮຸ່ງອາລຸນ, HAL, ມີໄຊ, ສາຂາ ...).
+- Join a multi-line address into one line separated by ", ", in the order the customer wrote it.
+- "note" is ONLY for other instructions that are not part of the address (e.g. ໂທກ່ອນສົ່ງ "call before delivery"). If there is nothing else, note must be null.
 
 Extract the order details from the image and return ONLY a JSON object (no markdown, no explanation) with this shape:
 {
-  "customer_name": string or null,   // prefer a name given in the order message itself; fall back to the chat contact's display name shown at the top of the screenshot; keep in its original script, untranslated
+  "customer_name": string or null,   // prefer a name given in the order message itself; fall back to the chat contact's display name shown at the top of the screenshot
   "customer_phone": string or null,  // digits only, no spaces or dashes
   "paid_qty": number or null,        // paid bags in the chosen combo
   "free_qty": number or null,        // free bags in the chosen combo
   "total_amount": number or null,    // total price in Kip for the chosen combo
-  "payment_method": "cod" | "destination" | "origin" or null,  // "cod" if the message says cash on delivery / collect on delivery; "destination" if it says pay at the delivery destination point; "origin" if it says pay at the origin/pickup point; null if not mentioned
-  "destination": string or null,     // the customer's delivery address as written in the message: village (ບ້ານ), district (ເມືອງ), province (ແຂວງ), landmarks, and the shipping company/branch (e.g. ອານຸສິດ, ຮຸ່ງອາລຸນ) if mentioned — keep in its original script, untranslated
-  "note": string or null             // anything else worth flagging that is not the address — keep in its original script, untranslated
+  "payment_method": "cod" | "destination" | "origin" or null,  // "cod" if the message says cash on delivery / ເກັບເງິນປາຍທາງ COD; "destination" if it says pay at the destination (ປາຍທາງ); "origin" if it says pay at origin / already paid (ຕົ້ນທາງ, ໂອນແລ້ວ); null if not mentioned
+  "destination": string or null,     // the full delivery address, see ADDRESS RULES
+  "note": string or null             // other instructions only, never the address
 }
 If the image contains no readable order, return all fields as null.`
 
@@ -101,6 +110,8 @@ Deno.serve(async (req) => {
           },
         ],
         generationConfig: {
+          // Deterministic output: we want a faithful transcription, not creativity.
+          temperature: 0,
           responseMimeType: 'application/json',
           responseSchema: {
             type: 'OBJECT',
@@ -111,9 +122,27 @@ Deno.serve(async (req) => {
               free_qty: { type: 'NUMBER', nullable: true },
               total_amount: { type: 'NUMBER', nullable: true },
               payment_method: { type: 'STRING', enum: ['cod', 'destination', 'origin'], nullable: true },
-              destination: { type: 'STRING', nullable: true },
-              note: { type: 'STRING', nullable: true },
+              destination: {
+                type: 'STRING',
+                nullable: true,
+                description: 'Full delivery address in Lao script: village, district, province, shipping company/branch',
+              },
+              note: {
+                type: 'STRING',
+                nullable: true,
+                description: 'Other instructions that are not part of the address; null if none',
+              },
             },
+            propertyOrdering: [
+              'customer_name',
+              'customer_phone',
+              'paid_qty',
+              'free_qty',
+              'total_amount',
+              'payment_method',
+              'destination',
+              'note',
+            ],
           },
         },
       }),
