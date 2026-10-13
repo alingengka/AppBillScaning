@@ -33,6 +33,9 @@
       #shine-person { -webkit-mask-image: var(--m-person); mask-image: var(--m-person); }
       #shine-cream  { -webkit-mask-image: var(--m-cream);  mask-image: var(--m-cream); }
 
+      .prize { position: absolute; inset: 0; will-change: transform; }
+      .prize img { position: absolute; inset: 0; width: 1920px; height: 1080px; display: block; }
+
       .spark {
         position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; opacity: 0;
         background:
@@ -47,12 +50,18 @@
   <body>
     <div id="root" data-composition-id="main" data-start="0" data-duration="6" data-width="1920" data-height="1080">
       <div id="stage" class="clip" data-start="0" data-duration="6" data-track-index="0">
-        <img id="banner" src="assets/banner.webp" alt="" />
+        <img id="banner" src="assets/bg_clean.webp" alt="" />
         <div id="shine-text"   class="shine"><div class="band" style="width:150px"></div></div>
-        <div id="shine-scoot"  class="shine"><div class="band" style="width:170px"></div></div>
-        <div id="shine-ipad"   class="shine"><div class="band" style="width:150px"></div></div>
         <div id="shine-person" class="shine"><div class="band" style="width:220px"></div></div>
         <div id="shine-cream"  class="shine"><div class="band" style="width:160px"></div></div>
+        <div id="prize-scoot" class="prize" style="transform-origin:487px 994px">
+          <img src="assets/cut_scoot.png" alt="" />
+          <div id="shine-scoot" class="shine"><div class="band" style="width:170px"></div></div>
+        </div>
+        <div id="prize-ipad" class="prize" style="transform-origin:925px 990px">
+          <img src="assets/cut_ipad.png" alt="" />
+          <div id="shine-ipad" class="shine"><div class="band" style="width:150px"></div></div>
+        </div>
         <div class="spark" style="left:542px;top:108px"></div>
         <div class="spark" style="left:718px;top:200px"></div>
         <div class="spark" style="left:870px;top:486px"></div>
@@ -79,6 +88,20 @@
         tl.set(band, { opacity: op }, 0);
         tl.fromTo(band, { x: x0, rotation: 22 }, { x: x1, rotation: 22, duration: d, ease: "power2.inOut" }, t);
       });
+
+      // Prize bounce: anticipate squash -> hop with stretch -> land squash -> elastic settle
+      function bounce(sel, t, lift, stretch = 1.06) {
+        tl.to(sel, { scaleX: 1.05, scaleY: 0.92, duration: 0.14, ease: "power1.out" }, t);
+        tl.to(sel, { y: -lift, scaleX: 2 - stretch, scaleY: stretch, duration: 0.24, ease: "power2.out" }, t + 0.14);
+        tl.to(sel, { y: 0, scaleX: 1, scaleY: 1, duration: 0.2, ease: "power2.in" }, t + 0.38);
+        tl.to(sel, { scaleX: 1.04, scaleY: 0.95, duration: 0.07, ease: "power1.out" }, t + 0.58);
+        tl.to(sel, { scaleX: 1, scaleY: 1, duration: 0.5, ease: "elastic.out(1, 0.45)" }, t + 0.65);
+      }
+      tl.set(["#prize-scoot", "#prize-ipad"], { x: 0, y: 0, scaleX: 1, scaleY: 1 }, 0);
+      bounce("#prize-scoot", 0.5, 30);
+      bounce("#prize-ipad", 0.8, 10, 1.02);
+      bounce("#prize-scoot", 3.5, 30);
+      bounce("#prize-ipad", 3.8, 10, 1.02);
 
       // Small, sparse twinkles
       [[0, 0.9], [1, 1.6], [2, 2.4], [3, 2.6]].forEach(([i, t]) => {
